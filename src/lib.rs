@@ -15,10 +15,12 @@ use wasm_bindgen::prelude::*;
 
 
 pub mod discovery;
-
+pub mod web3;
+pub mod interface;
 
 #[wasm_bindgen(start)]
 pub fn main() {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
     console_log::init_with_level(Level::Debug).expect("error initializing log");
+    yew::start_app::<interface::MainView>();
 }
