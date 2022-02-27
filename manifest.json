@@ -6,8 +6,8 @@
 
   "description": "Web Extension for bns",
 
-  "48": {
-    "icons": "static/imgs/favicon.png"
+  "icons": {
+    "48": "static/imgs/favicon.png"
   },
   "permissions": [
     "activeTab"
@@ -19,6 +19,5 @@
   },
   "background": {
     "page": "static/index.html"
-  },
-  "content_security_policy": "script-src 'unsafe-inline' 'self'"
+  }
 }

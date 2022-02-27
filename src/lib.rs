@@ -16,6 +16,7 @@ use wasm_bindgen::prelude::*;
 
 pub mod discovery;
 pub mod web3;
+pub mod metamask;
 pub mod interface;
 
 #[wasm_bindgen(start)]
