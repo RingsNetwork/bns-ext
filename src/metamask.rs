@@ -38,8 +38,7 @@ extern "C" {
     /// An EIP-1193 provider object. Available by convention at `window.ethereum`
     pub type Port;
 
-
-    #[wasm_bindgen(catch, inline_js="export function browser() {browser.runtime}")]
+    #[wasm_bindgen(catch, inline_js="export function browser() { try { browser.runtime }}")]
     pub fn runtime() -> Result<Runtime, JsValue>;
 
     #[wasm_bindgen(method)]
