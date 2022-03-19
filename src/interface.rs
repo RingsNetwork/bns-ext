@@ -2,8 +2,10 @@ use yew::prelude::*;
 use yew::NodeRef;
 use std::sync::Arc;
 use bns_core::swarm::Swarm;
+use bns_core::dht::Chord;
 use bns_core::types::ice_transport::IceTrickleScheme;
-use bns_core::encoder::Encoded;
+use bns_core::message::handler::MessageHandler;
+use futures::lock::Mutex;
 use web_sys::RtcSdpType;
 use bns_core::ecc::SecretKey;
 use anyhow::Result;
@@ -17,6 +19,7 @@ pub struct MainView {
     pub swarm: Arc<Swarm>,
     pub web3: Option<Web3Provider>,
     pub key: SecretKey,
+    pub msg_handler: Arc<MessageHandler>,
     sdp_input_ref: NodeRef,
     http_input_ref: NodeRef
 
@@ -30,13 +33,17 @@ pub enum Msg {
 
 impl MainView {
     pub fn new(cfg: &SwarmConfig) -> Self {
+        let dht = Arc::new(Mutex::new(Chord::new(cfg.key.address().into())));
+        let swarm = Arc::new(Swarm::new(Arc::clone(&cfg.channel), &cfg.stun, cfg.key));
+        let msg_handler = Arc::new(MessageHandler::new(Arc::clone(&dht), swarm.clone()));
+        let handler_cloned = Arc::clone(&msg_handler);
+        spawn_local(async move {
+            log::trace!("call listener");
+            handler_cloned.listen().await;
+        });
         Self {
-            swarm: Arc::new(
-                Swarm::new(
-                    Arc::clone(&cfg.channel),
-                    cfg.stun.to_owned(),
-                    cfg.key.address())
-            ),
+            swarm: Arc::clone(&swarm),
+            msg_handler: Arc::clone(&msg_handler),
             web3: Web3Provider::new(),
             key: cfg.key,
             sdp_input_ref: NodeRef::default(),
@@ -48,7 +55,6 @@ impl MainView {
         let client = reqwest_wasm::Client::new();
         let transport = swarm.new_transport().await?;
         let req = transport.get_handshake_info(key, RtcSdpType::Offer).await?;
-        log::debug!("req: {:?}", req);
         match client
             .post(&url)
             .body(TryInto::<String>::try_into(req)?)
@@ -62,7 +68,7 @@ impl MainView {
                 let addr = transport
                     .register_remote_info(String::from_utf8(resp.as_bytes().to_vec())?.try_into()?)
                     .await?;
-                swarm.register(addr, Arc::clone(&transport));
+                swarm.register(&addr, Arc::clone(&transport)).await?;
                 Ok("ok".to_string())
             }
             Err(e) => {

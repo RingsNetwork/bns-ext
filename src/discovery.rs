@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use bns_core::swarm::Swarm;
 use bns_core::types::channel::Channel;
 use bns_core::channels::wasm::CbChannel;
@@ -19,21 +18,6 @@ impl Default for SwarmConfig {
             stun: "stun:stun.l.google.com:19302".to_string(),
             channel: Arc::new(CbChannel::new(1)),
             key: SecretKey::random()
-        }
-    }
-}
-
-pub struct Peer {
-    pub swarm: Swarm
-}
-
-impl Peer {
-    pub fn new(cfg: &SwarmConfig) -> Self {
-        Self {
-            swarm: Swarm::new(
-                Arc::clone(&cfg.channel),
-                cfg.stun.to_owned(),
-                cfg.key.address())
         }
     }
 }
