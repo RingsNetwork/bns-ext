@@ -5,17 +5,16 @@ use web3::api::Web3;
 use web3::transports::eip_1193::Eip1193;
 use web3::transports::eip_1193::Provider;
 
-
 pub enum Browser {
     Chrome,
-    Firefox
+    Firefox,
 }
 
 // https://github.com/MetaMask/extension-provider/blob/master/config.json
 pub fn get_metamask_id(browser: Browser) -> String {
     match browser {
         Browser::Chrome => "nkbihfbeogaeaoehlefnkodbefgpgknn".to_string(),
-        Browser::Firefox => "webextension@metamask.io".to_string()
+        Browser::Firefox => "webextension@metamask.io".to_string(),
     }
 }
 

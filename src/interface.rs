@@ -1,19 +1,19 @@
-use yew::prelude::*;
-use yew::NodeRef;
-use std::sync::Arc;
-use bns_core::swarm::Swarm;
-use bns_core::dht::Chord;
-use bns_core::types::ice_transport::IceTrickleScheme;
-use bns_core::message::handler::MessageHandler;
-use futures::lock::Mutex;
-use web_sys::RtcSdpType;
-use bns_core::ecc::SecretKey;
-use anyhow::Result;
-use anyhow::anyhow;
-use web_sys::HtmlInputElement;
 use crate::discovery::SwarmConfig;
 use crate::web3::Web3Provider;
+use anyhow::anyhow;
+use anyhow::Result;
+use bns_core::dht::Chord;
+use bns_core::ecc::SecretKey;
+use bns_core::message::handler::MessageHandler;
+use bns_core::swarm::Swarm;
+use bns_core::types::ice_transport::IceTrickleScheme;
+use futures::lock::Mutex;
+use std::sync::Arc;
 use wasm_bindgen_futures::spawn_local;
+use web_sys::HtmlInputElement;
+use web_sys::RtcSdpType;
+use yew::prelude::*;
+use yew::NodeRef;
 
 pub struct MainView {
     pub swarm: Arc<Swarm>,
@@ -21,14 +21,13 @@ pub struct MainView {
     pub key: SecretKey,
     pub msg_handler: Arc<MessageHandler>,
     sdp_input_ref: NodeRef,
-    http_input_ref: NodeRef
-
+    http_input_ref: NodeRef,
 }
 
 pub enum Msg {
     ConnectPeerViaHTTP(String),
     ConnectPeerViaICE(String),
-    None
+    None,
 }
 
 impl MainView {
@@ -38,7 +37,6 @@ impl MainView {
         let msg_handler = Arc::new(MessageHandler::new(Arc::clone(&dht), swarm.clone()));
         let handler_cloned = Arc::clone(&msg_handler);
         spawn_local(async move {
-            log::trace!("call listener");
             handler_cloned.listen().await;
         });
         Self {
@@ -47,11 +45,15 @@ impl MainView {
             web3: Web3Provider::new(),
             key: cfg.key,
             sdp_input_ref: NodeRef::default(),
-            http_input_ref: NodeRef::default()
+            http_input_ref: NodeRef::default(),
         }
     }
 
-    pub async fn trickle_handshake(swarm: Arc<Swarm>, key: SecretKey, url: String) -> Result<String> {
+    pub async fn trickle_handshake(
+        swarm: Arc<Swarm>,
+        key: SecretKey,
+        url: String,
+    ) -> Result<String> {
         let client = reqwest_wasm::Client::new();
         let transport = swarm.new_transport().await?;
         let req = transport.get_handshake_info(key, RtcSdpType::Offer).await?;
@@ -87,11 +89,11 @@ impl Component for MainView {
         Self::new(&SwarmConfig::default())
     }
 
-    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Msg::ConnectPeerViaHTTP(url) => {
                 let swarm = Arc::clone(&self.swarm);
-                let key = self.key.clone();
+                let key = self.key;
                 spawn_local(async move {
                     match Self::trickle_handshake(swarm, key, url).await {
                         Ok(s) => log::info!("{:?}", s),
@@ -101,9 +103,9 @@ impl Component for MainView {
                     }
                 });
                 true
-            },
-            Msg::ConnectPeerViaICE(sdp) => false,
-            Msg::None => false
+            }
+            Msg::ConnectPeerViaICE(_sdp) => false,
+            Msg::None => false,
         }
     }
 
@@ -112,7 +114,7 @@ impl Component for MainView {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
-        html!{
+        html! {
             <body>
                 <div id="viewport">
                 <p>

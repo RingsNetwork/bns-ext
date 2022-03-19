@@ -12,12 +12,10 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 use log::Level;
 use wasm_bindgen::prelude::*;
 
-
-
 pub mod discovery;
-pub mod web3;
-pub mod metamask;
 pub mod interface;
+pub mod metamask;
+pub mod web3;
 
 #[wasm_bindgen(start)]
 pub fn main() {

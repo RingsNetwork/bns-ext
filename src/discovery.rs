@@ -1,7 +1,6 @@
-use bns_core::swarm::Swarm;
-use bns_core::types::channel::Channel;
 use bns_core::channels::wasm::CbChannel;
 use bns_core::ecc::SecretKey;
+use bns_core::types::channel::Channel;
 use std::default::Default;
 use std::sync::Arc;
 
@@ -9,7 +8,7 @@ use std::sync::Arc;
 pub struct SwarmConfig {
     pub stun: String,
     pub channel: Arc<CbChannel>,
-    pub key: SecretKey
+    pub key: SecretKey,
 }
 
 impl Default for SwarmConfig {
@@ -17,7 +16,7 @@ impl Default for SwarmConfig {
         Self {
             stun: "stun:stun.l.google.com:19302".to_string(),
             channel: Arc::new(CbChannel::new(1)),
-            key: SecretKey::random()
+            key: SecretKey::random(),
         }
     }
 }

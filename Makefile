@@ -18,4 +18,4 @@ dev:
 	make -j 2 watch ruN
 
 release-build:
-	wasm-pack build --release --target web --out-name wasm --out-dir ./static
+	wasm-pacK build --release --target web --out-name wasm --out-dir ./static
