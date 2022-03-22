@@ -35,10 +35,6 @@ impl MainView {
         let dht = Arc::new(Mutex::new(Chord::new(cfg.key.address().into())));
         let swarm = Arc::new(Swarm::new(Arc::clone(&cfg.channel), &cfg.stun, cfg.key));
         let msg_handler = Arc::new(MessageHandler::new(Arc::clone(&dht), swarm.clone()));
-        let handler_cloned = Arc::clone(&msg_handler);
-        spawn_local(async move {
-            handler_cloned.listen().await;
-        });
         Self {
             swarm: Arc::clone(&swarm),
             msg_handler: Arc::clone(&msg_handler),
@@ -47,6 +43,41 @@ impl MainView {
             sdp_input_ref: NodeRef::default(),
             http_input_ref: NodeRef::default(),
         }
+    }
+
+    pub fn listen(&self) {
+        let msg_handler = Arc::clone(&self.msg_handler);
+
+        use wasm_bindgen::JsCast;
+        let window = web_sys::window().unwrap();
+        let handler = Arc::clone(&msg_handler);
+
+        let func = wasm_bindgen::prelude::Closure::wrap(
+            (box move |func: js_sys::Function| {
+                let handler = Arc::clone(&handler);
+                spawn_local(Box::pin(async move {
+                    log::debug!("POLL");
+                    handler.listen_once().await;
+                }));
+                let window = web_sys::window().unwrap();
+                window
+                    .set_timeout_with_callback_and_timeout_and_arguments(
+                        func.unchecked_ref(),
+                        200,
+                        &js_sys::Array::of1(&func)
+                    )
+                    .unwrap();
+            }) as Box<dyn FnMut(js_sys::Function)>
+        );
+        window
+            .set_timeout_with_callback_and_timeout_and_arguments(
+                &func.as_ref().unchecked_ref(),
+                200,
+                &js_sys::Array::of1(&func.as_ref().unchecked_ref())
+            )
+            .unwrap();
+        func.forget();
+
     }
 
     pub async fn trickle_handshake(
@@ -86,7 +117,9 @@ impl Component for MainView {
     type Properties = ();
 
     fn create(_ctx: &Context<Self>) -> Self {
-        Self::new(&SwarmConfig::default())
+        let ret = Self::new(&SwarmConfig::default());
+        ret.listen();
+        ret
     }
 
     fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
