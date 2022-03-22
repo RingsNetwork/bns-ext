@@ -46,6 +46,12 @@ impl MainView {
     }
 
     pub fn listen(&self) {
+        // for impl recursion, we need
+        // func = fn(func: Function) {
+        //     poll();
+        //     set_timeout(func, 200, func);
+        // }
+        // set_timeout(func, 200, func)
         let msg_handler = Arc::clone(&self.msg_handler);
 
         use wasm_bindgen::JsCast;
@@ -77,7 +83,6 @@ impl MainView {
             )
             .unwrap();
         func.forget();
-
     }
 
     pub async fn trickle_handshake(
