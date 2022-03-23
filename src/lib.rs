@@ -16,6 +16,7 @@ pub mod discovery;
 pub mod interface;
 pub mod metamask;
 pub mod web3;
+pub mod helper;
 
 #[wasm_bindgen(start)]
 pub fn start() {

@@ -1,5 +1,6 @@
 use crate::discovery::SwarmConfig;
 use crate::web3::Web3Provider;
+use crate::poll;
 use anyhow::anyhow;
 use anyhow::Result;
 use bns_core::dht::Chord;
@@ -46,43 +47,18 @@ impl MainView {
     }
 
     pub fn listen(&self) {
-        // for impl recursion, we need
-        // func = fn(func: Function) {
-        //     poll();
-        //     set_timeout(func, 200, func);
-        // }
-        // set_timeout(func, 200, func)
         let msg_handler = Arc::clone(&self.msg_handler);
 
-        use wasm_bindgen::JsCast;
-        let window = web_sys::window().unwrap();
         let handler = Arc::clone(&msg_handler);
-
-        let func = wasm_bindgen::prelude::Closure::wrap(
-            (box move |func: js_sys::Function| {
-                let handler = Arc::clone(&handler);
-                spawn_local(Box::pin(async move {
-                    log::debug!("POLL");
-                    handler.listen_once().await;
-                }));
-                let window = web_sys::window().unwrap();
-                window
-                    .set_timeout_with_callback_and_timeout_and_arguments(
-                        func.unchecked_ref(),
-                        200,
-                        &js_sys::Array::of1(&func)
-                    )
-                    .unwrap();
-            }) as Box<dyn FnMut(js_sys::Function)>
-        );
-        window
-            .set_timeout_with_callback_and_timeout_and_arguments(
-                &func.as_ref().unchecked_ref(),
-                200,
-                &js_sys::Array::of1(&func.as_ref().unchecked_ref())
-            )
-            .unwrap();
-        func.forget();
+        let func = move || {
+            let handler = Arc::clone(&handler);
+            log::debug!("POLL");
+            spawn_local(Box::pin(async move {
+                log::debug!("POLL");
+                handler.listen_once().await;
+            }));
+        };
+        poll!(func, 200);
     }
 
     pub async fn trickle_handshake(
