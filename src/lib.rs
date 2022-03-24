@@ -21,6 +21,6 @@ pub mod helper;
 #[wasm_bindgen(start)]
 pub fn start() {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
-    console_log::init_with_level(Level::Trace).expect("error initializing log");
+    console_log::init_with_level(Level::Debug).expect("error initializing log");
     yew::start_app_with_props::<interface::MainView>(());
 }
