@@ -54,9 +54,7 @@ impl MainView {
         let func = move || {
             let handler = Arc::clone(&handler);
 
-            log::debug!("POLL");
             spawn_local(Box::pin(async move {
-                log::debug!("POLL");
                 handler.listen_once().await;
             }));
         };
