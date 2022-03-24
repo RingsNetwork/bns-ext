@@ -15,6 +15,7 @@ use web_sys::HtmlInputElement;
 use web_sys::RtcSdpType;
 use yew::prelude::*;
 use yew::NodeRef;
+use bns_core::swarm::TransportManager;
 
 pub struct MainView {
     pub swarm: Arc<Swarm>,
@@ -34,7 +35,7 @@ pub enum Msg {
 impl MainView {
     pub fn new(cfg: &SwarmConfig) -> Self {
         let dht = Arc::new(Mutex::new(Chord::new(cfg.key.address().into())));
-        let swarm = Arc::new(Swarm::new(Arc::clone(&cfg.channel), &cfg.stun, cfg.key));
+        let swarm = Arc::new(Swarm::new(&cfg.stun, cfg.key));
         let msg_handler = Arc::new(MessageHandler::new(Arc::clone(&dht), swarm.clone()));
         Self {
             swarm: Arc::clone(&swarm),
@@ -52,6 +53,7 @@ impl MainView {
         let handler = Arc::clone(&msg_handler);
         let func = move || {
             let handler = Arc::clone(&handler);
+
             log::debug!("POLL");
             spawn_local(Box::pin(async move {
                 log::debug!("POLL");

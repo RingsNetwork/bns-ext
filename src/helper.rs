@@ -1,9 +1,9 @@
-/// for impl recursion, we need
+/// for impl recursion, we need:
 /// func = fn(func: Function) {
 ///     poll();
-///     set_timeout(func, 200, func);
+///     set_timeout(func, timeout, func);
 /// }
-/// set_timeout(func, 200, func)
+/// set_timeout(func, timeout, func)
 #[macro_export]
 macro_rules! poll {
     ( $func:expr, $ttl:expr ) => {
