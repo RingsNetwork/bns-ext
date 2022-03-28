@@ -1,12 +1,13 @@
 use crate::discovery::SwarmConfig;
 use crate::web3::Web3Provider;
-use crate::poll;
+
 use anyhow::anyhow;
 use anyhow::Result;
 use bns_core::dht::Chord;
 use bns_core::ecc::SecretKey;
 use bns_core::message::handler::MessageHandler;
 use bns_core::swarm::Swarm;
+use bns_core::swarm::TransportManager;
 use bns_core::types::ice_transport::IceTrickleScheme;
 use futures::lock::Mutex;
 use std::sync::Arc;
@@ -15,7 +16,6 @@ use web_sys::HtmlInputElement;
 use web_sys::RtcSdpType;
 use yew::prelude::*;
 use yew::NodeRef;
-use bns_core::swarm::TransportManager;
 
 pub struct MainView {
     pub swarm: Arc<Swarm>,
