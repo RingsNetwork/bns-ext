@@ -13,10 +13,10 @@ use log::Level;
 use wasm_bindgen::prelude::*;
 
 pub mod discovery;
+pub mod helper;
 pub mod interface;
 pub mod metamask;
 pub mod web3;
-pub mod helper;
 
 #[wasm_bindgen(start)]
 pub fn start() {
