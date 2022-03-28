@@ -51,14 +51,10 @@ impl MainView {
         let msg_handler = Arc::clone(&self.msg_handler);
 
         let handler = Arc::clone(&msg_handler);
-        let func = move || {
-            let handler = Arc::clone(&handler);
-
-            spawn_local(Box::pin(async move {
-                handler.listen_once().await;
-            }));
-        };
-        poll!(func, 200);
+        let handler = Arc::clone(&handler);
+        spawn_local(Box::pin(async move {
+            handler.listen();
+        }));
     }
 
     pub async fn trickle_handshake(
