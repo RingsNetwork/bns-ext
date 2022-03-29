@@ -298,6 +298,10 @@ impl Component for MainView {
 
                 </div>
                 </div>
+                <p>
+                <textarea></textarea>
+                <button>{"send message"}</button>
+                </p>
             </body>
         }
     }
