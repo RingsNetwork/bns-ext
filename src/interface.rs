@@ -3,6 +3,7 @@ use crate::web3::Web3Provider;
 
 use anyhow::anyhow;
 use anyhow::Result;
+use bns_core::transports::Transport;
 use bns_core::dht::Chord;
 use bns_core::ecc::SecretKey;
 use bns_core::message::handler::MessageHandler;
@@ -22,13 +23,18 @@ pub struct MainView {
     pub web3: Option<Web3Provider>,
     pub key: SecretKey,
     pub msg_handler: Arc<MessageHandler>,
+    pub pending_transport: Arc<Mutex<Option<Arc<Transport>>>>,
+    pub current_sdp: Arc<std::sync::Mutex<Option<String>>>,
     sdp_input_ref: NodeRef,
     http_input_ref: NodeRef,
+    sdp_textarea_ref: NodeRef
 }
 
 pub enum Msg {
     ConnectPeerViaHTTP(String),
     ConnectPeerViaICE(String),
+    GenerateSdp,
+    Update,
     None,
 }
 
@@ -42,8 +48,11 @@ impl MainView {
             msg_handler: Arc::clone(&msg_handler),
             web3: Web3Provider::new(),
             key: cfg.key,
+            pending_transport: Arc::new(Mutex::new(None)),
+            current_sdp: Arc::new(std::sync::Mutex::new(None)),
             sdp_input_ref: NodeRef::default(),
             http_input_ref: NodeRef::default(),
+            sdp_textarea_ref: NodeRef::default()
         }
     }
 
@@ -53,7 +62,7 @@ impl MainView {
         let handler = Arc::clone(&msg_handler);
         let handler = Arc::clone(&handler);
         spawn_local(Box::pin(async move {
-            handler.listen();
+            handler.listen().await;
         }));
     }
 
@@ -95,11 +104,11 @@ impl Component for MainView {
 
     fn create(_ctx: &Context<Self>) -> Self {
         let ret = Self::new(&SwarmConfig::default());
-        ret.listen();
+//        ret.listen();
         ret
     }
 
-    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
+    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Msg::ConnectPeerViaHTTP(url) => {
                 let swarm = Arc::clone(&self.swarm);
@@ -115,7 +124,45 @@ impl Component for MainView {
                 true
             }
             Msg::ConnectPeerViaICE(_sdp) => false,
+            Msg::GenerateSdp => {
+                let swarm = Arc::clone(&self.swarm);
+                let pending = Arc::clone(&self.pending_transport);
+                let sec_key = self.key.clone();
+                let current_sdp = Arc::clone(&self.current_sdp);
+                let link = ctx.link().clone();
+                spawn_local(async move {
+                    match swarm.new_transport().await {
+                        Ok(t) => {
+                            match t.get_handshake_info(sec_key, web_sys::RtcSdpType::Offer).await {
+                                Ok(sdp) => {
+                                    log::debug!("setting sdp area");
+                                    let mut p = pending.lock().await;
+                                    let mut s = current_sdp.lock().unwrap();
+                                    *p = Some(Arc::clone(&t));
+                                    *s = Some(sdp.to_string());
+                                    drop(p);
+                                    drop(s);
+                                    log::debug!("done setting sdp area");
+                                    link.send_message(Msg::Update);
+                                },
+                                Err(e) => {
+                                    log::error!("cannot generate sdp offer {:?}", e)
+                                }
+                            }
+                        },
+                        Err(_) => {
+                            log::error!("failed to setting pending transport")
+                        }
+                    }
+                });
+                log::debug!("should update");
+                false
+            }
             Msg::None => false,
+            Msg::Update => {
+                log::debug!("force update!");
+                true
+            }
         }
     }
 
@@ -150,6 +197,12 @@ impl Component for MainView {
                         }
                     })
                 }>{"Connect To Entry Node"}</button>
+                </p>
+                <p>
+                <pre ref={self.sdp_textarea_ref.clone()}>{
+                    (*self.current_sdp.lock().unwrap()).as_ref().unwrap_or(&"".to_string())
+                }</pre>
+                <button onclick={ctx.link().callback(move |_| Msg::GenerateSdp)}>{"Generate Handshake SDP"}</button>
                 </p>
                 </div>
             </body>
