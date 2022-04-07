@@ -2,17 +2,17 @@
 
 use crate::discovery::SwarmConfig;
 use crate::web3::Web3Provider;
-use wasm_bindgen::JsValue;
 use anyhow::anyhow;
 use anyhow::Result;
-use bns_core::transports::Transport;
 use bns_core::dht::Chord;
 use bns_core::ecc::SecretKey;
 use bns_core::message::handler::MessageHandler;
-use bns_core::message::Encoded;
+use bns_core::message::{Decoder, Encoder};
 use bns_core::swarm::Swarm;
 use bns_core::swarm::TransportManager;
+use bns_core::transports::wasm::WasmTransport as Transport;
 use bns_core::types::ice_transport::IceTrickleScheme;
+use bns_core::types::message::MessageListener;
 use futures::lock::Mutex;
 use std::sync::Arc;
 use wasm_bindgen_futures::spawn_local;
@@ -65,10 +65,8 @@ impl MainView {
 
     pub fn listen(&self) {
         let msg_handler = Arc::clone(&self.msg_handler);
-
-        let handler = Arc::clone(&msg_handler);
-        let handler = Arc::clone(&handler);
         spawn_local(Box::pin(async move {
+            let handler = Arc::clone(&msg_handler);
             handler.listen().await;
         }));
     }
@@ -83,7 +81,7 @@ impl MainView {
         let req = transport.get_handshake_info(key, RtcSdpType::Offer).await?;
         match client
             .post(&url)
-            .body(TryInto::<String>::try_into(req)?)
+            .body(String::from_encoded(&req)?)
             .send()
             .await?
             .text()
@@ -92,7 +90,7 @@ impl MainView {
             Ok(resp) => {
                 log::debug!("get answer and candidate from remote");
                 let addr = transport
-                    .register_remote_info(String::from_utf8(resp.as_bytes().to_vec())?.try_into()?)
+                    .register_remote_info(String::from_utf8(resp.as_bytes().to_vec())?.encode()?)
                     .await?;
                 swarm.register(&addr, Arc::clone(&transport)).await?;
                 Ok("ok".to_string())
@@ -111,7 +109,7 @@ impl Component for MainView {
 
     fn create(_ctx: &Context<Self>) -> Self {
         let ret = Self::new(&SwarmConfig::default());
-//        ret.listen();
+        //        ret.listen();
         ret
     }
 
@@ -140,7 +138,10 @@ impl Component for MainView {
                 spawn_local(async move {
                     match swarm.new_transport().await {
                         Ok(t) => {
-                            match t.get_handshake_info(sec_key, web_sys::RtcSdpType::Offer).await {
+                            match t
+                                .get_handshake_info(sec_key, web_sys::RtcSdpType::Offer)
+                                .await
+                            {
                                 Ok(sdp) => {
                                     log::debug!("setting sdp offer area");
                                     let mut p = pending.lock().await;
@@ -151,12 +152,12 @@ impl Component for MainView {
                                     drop(s);
                                     log::debug!("done setting sdp offer area");
                                     link.send_message(Msg::Update);
-                                },
+                                }
                                 Err(e) => {
                                     log::error!("cannot generate sdp offer {:?}", e);
                                 }
                             }
-                        },
+                        }
                         Err(_) => {
                             log::error!("failed to setting pending transport");
                         }
@@ -176,27 +177,25 @@ impl Component for MainView {
 
                 spawn_local(async move {
                     match swarm.new_transport().await {
-                        Ok(t) => {
-                            match t.register_remote_info(Encoded(offer)).await {
-                                Ok(addr) => {
-                                    let sdp = t.get_handshake_info(sec_key, web_sys::RtcSdpType::Answer).await.unwrap();
-                                    swarm.register(&addr, t.clone()).await.unwrap();
-                                    log::debug!("setting sdp answer area");
-                                    let mut p = pending.lock().await;
-                                    let mut s = current_answer.lock().unwrap();
-                                    *p = Some(Arc::clone(&t));
-                                    *s = Some(sdp.to_string());
-                                    drop(p);
-                                    drop(s);
-                                    log::debug!("done setting sdp answer area");
-                                    link.send_message(Msg::Update);
-
-
-                                },
-                                Err(e) => {
-                                    log::error!("cannot generate sdp answer {:?}", e);
-
-                                }
+                        Ok(t) => match t.register_remote_info(offer.encode().unwrap()).await {
+                            Ok(addr) => {
+                                let sdp = t
+                                    .get_handshake_info(sec_key, web_sys::RtcSdpType::Answer)
+                                    .await
+                                    .unwrap();
+                                swarm.register(&addr, t.clone()).await.unwrap();
+                                log::debug!("setting sdp answer area");
+                                let mut p = pending.lock().await;
+                                let mut s = current_answer.lock().unwrap();
+                                *p = Some(Arc::clone(&t));
+                                *s = Some(sdp.to_string());
+                                drop(p);
+                                drop(s);
+                                log::debug!("done setting sdp answer area");
+                                link.send_message(Msg::Update);
+                            }
+                            Err(e) => {
+                                log::error!("cannot generate sdp answer {:?}", e);
                             }
                         },
                         Err(e) => {
@@ -217,7 +216,10 @@ impl Component for MainView {
 
                 spawn_local(async move {
                     if let Some(t) = &*pending.lock().await {
-                        let addr = t.register_remote_info(Encoded(answer)).await.unwrap();
+                        let addr = t
+                            .register_remote_info(answer.encode().unwrap())
+                            .await
+                            .unwrap();
                         swarm.register(&addr, t.clone()).await.unwrap();
                         link.send_message(Msg::Update);
                     }
@@ -228,7 +230,7 @@ impl Component for MainView {
                 log::debug!("force update!");
                 true
             }
-            _ => false
+            _ => false,
         }
     }
 
