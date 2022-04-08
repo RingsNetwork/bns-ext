@@ -16,6 +16,7 @@ console_error_panic_hook = "0.1.6"
 wasm-bindgen-futures = {version="0.4.29", features=["futures-core-03-stream"]}
 web3 = {version="0.17.0", features = ["wasm", "eip-1193"], default-features = false}
 jsonrpc-core = "18.0.0"
+jsonrpc-core-client = { version = "18.0.0", features = ["http"] }
 hex = "0.4.2"
 wee_alloc = "0.4.5"
 futures = "0.3.5"

@@ -64,6 +64,7 @@ impl Provider {
 
 /// EIP-1193 transport
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct Eip1193 {
     provider_and_listeners: Rc<RefCell<ProviderAndListeners>>,
     subscriptions: Subscriptions,
@@ -73,6 +74,7 @@ pub struct Eip1193 {
 /// `Drop` implementation. The logic can't go in Eip1193 because it's `Clone`, and cloning a JS
 /// object just clones the reference.
 #[derive(Debug)]
+#[allow(clippy::type_complexity)]
 pub struct ProviderAndListeners {
     pub provider: Provider,
     pub listeners: BTreeMap<String, Vec<Closure<dyn FnMut(JsValue)>>>,
