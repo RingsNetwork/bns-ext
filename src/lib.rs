@@ -1,5 +1,6 @@
 #![feature(box_patterns)]
 #![feature(box_syntax)]
+#![allow(clippy::unused_unit)]
 
 extern crate console_error_panic_hook;
 #[cfg(feature = "release")]

@@ -7,13 +7,14 @@ use anyhow::Result;
 use bns_core::dht::Chord;
 use bns_core::ecc::SecretKey;
 use bns_core::message::handler::MessageHandler;
-use bns_core::message::{Decoder, Encoder};
 use bns_core::swarm::Swarm;
 use bns_core::swarm::TransportManager;
 use bns_core::transports::wasm::WasmTransport as Transport;
 use bns_core::types::ice_transport::IceTrickleScheme;
 use bns_core::types::message::MessageListener;
 use futures::lock::Mutex;
+use serde::Deserialize;
+use serde_json::json;
 use std::sync::Arc;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlInputElement;
@@ -42,6 +43,12 @@ pub enum Msg {
     GenerateSdp,
     Update,
     None,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct RemoteTransportInfo {
+    pub transport_id: String,
+    pub ice: String,
 }
 
 impl MainView {
@@ -76,30 +83,28 @@ impl MainView {
         key: SecretKey,
         url: String,
     ) -> Result<String> {
-        let client = reqwest_wasm::Client::new();
+        let client: jsonrpc_core_client::RawClient =
+            jsonrpc_core_client::transports::http::connect(&url)
+                .await
+                .map_err(|e| anyhow!("create client failed: {}", e))?;
+        //let client = reqwest_wasm::Client::new();
         let transport = swarm.new_transport().await?;
         let req = transport.get_handshake_info(key, RtcSdpType::Offer).await?;
-        match client
-            .post(&url)
-            .body(String::from_encoded(&req)?)
-            .send()
-            .await?
-            .text()
+        let resp = client
+            .call_method(
+                "connectPeerViaIce",
+                jsonrpc_core::Params::Array(vec![json!(req.to_string())]),
+            )
             .await
-        {
-            Ok(resp) => {
-                log::debug!("get answer and candidate from remote");
-                let addr = transport
-                    .register_remote_info(String::from_utf8(resp.as_bytes().to_vec())?.encode()?)
-                    .await?;
-                swarm.register(&addr, Arc::clone(&transport)).await?;
-                Ok("ok".to_string())
-            }
-            Err(e) => {
-                log::error!("someting wrong {:?}", e);
-                anyhow::Result::Err(anyhow!(e))
-            }
-        }
+            .map_err(|e| anyhow!("communicate with url failed: {}", e))?;
+        let info: RemoteTransportInfo = serde_json::from_value(resp)?;
+        log::debug!(
+            "get answer and candidate from remote, transport_id: {}",
+            info.transport_id
+        );
+        let addr = transport.register_remote_info(info.ice.into()).await?;
+        swarm.register(&addr, Arc::clone(&transport)).await?;
+        Ok("ok".to_string())
     }
 }
 
@@ -108,9 +113,7 @@ impl Component for MainView {
     type Properties = ();
 
     fn create(_ctx: &Context<Self>) -> Self {
-        let ret = Self::new(&SwarmConfig::default());
-        //        ret.listen();
-        ret
+        Self::new(&SwarmConfig::default())
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
@@ -132,52 +135,49 @@ impl Component for MainView {
             Msg::GenerateSdp => {
                 let swarm = Arc::clone(&self.swarm);
                 let pending = Arc::clone(&self.pending_transport);
-                let sec_key = self.key.clone();
+                let sec_key = self.key;
                 let current_offer = Arc::clone(&self.current_offer);
                 let link = ctx.link().clone();
                 spawn_local(async move {
-                    match swarm.new_transport().await {
-                        Ok(t) => {
-                            match t
-                                .get_handshake_info(sec_key, web_sys::RtcSdpType::Offer)
-                                .await
-                            {
-                                Ok(sdp) => {
-                                    log::debug!("setting sdp offer area");
-                                    let mut p = pending.lock().await;
-                                    let mut s = current_offer.lock().unwrap();
-                                    *p = Some(Arc::clone(&t));
-                                    *s = Some(sdp.to_string());
-                                    drop(p);
-                                    drop(s);
-                                    log::debug!("done setting sdp offer area");
-                                    link.send_message(Msg::Update);
-                                }
-                                Err(e) => {
-                                    log::error!("cannot generate sdp offer {:?}", e);
-                                }
-                            }
-                        }
-                        Err(_) => {
-                            log::error!("failed to setting pending transport");
-                        }
+                    let f = async {
+                        let transport = swarm
+                            .new_transport()
+                            .await
+                            .map_err(|e| anyhow!("failed to setting pending transport: {}", e))?;
+                        let sdp = transport
+                            .get_handshake_info(sec_key, web_sys::RtcSdpType::Offer)
+                            .await
+                            .map_err(|e| anyhow!("cannot generate sdp offer {:?}", e))?;
+                        log::debug!("setting sdp offer area");
+                        let mut p = pending.lock().await;
+                        let mut s = current_offer.lock().unwrap();
+                        *p = Some(Arc::clone(&transport));
+                        *s = Some(sdp.to_string());
+                        drop(p);
+                        drop(s);
+                        log::debug!("done setting sdp offer area");
+                        link.send_message(Msg::Update);
+                        anyhow::Ok(())
+                    };
+                    if let Err(e) = f.await {
+                        log::error!("{}", e);
                     }
                 });
                 log::debug!("should update");
                 false
             }
             Msg::ResponseOffer(s) => {
-                log::debug!("get offer {:?}", s.clone());
+                log::debug!("get offer {:?}", s);
                 let swarm = Arc::clone(&self.swarm);
-                let offer = s.clone();
+                let offer = s;
                 let pending = Arc::clone(&self.pending_transport);
                 let current_answer = Arc::clone(&self.current_answer);
                 let link = ctx.link().clone();
-                let sec_key = self.key.clone();
+                let sec_key = self.key;
 
                 spawn_local(async move {
                     match swarm.new_transport().await {
-                        Ok(t) => match t.register_remote_info(offer.encode().unwrap()).await {
+                        Ok(t) => match t.register_remote_info(offer.into()).await {
                             Ok(addr) => {
                                 let sdp = t
                                     .get_handshake_info(sec_key, web_sys::RtcSdpType::Answer)
@@ -211,15 +211,12 @@ impl Component for MainView {
                 //     log::error!("cannot find pending transport, maybe you should create offer first");
                 // }
                 let swarm = Arc::clone(&self.swarm);
-                let answer = s.clone();
+                let answer = s;
                 let link = ctx.link().clone();
 
                 spawn_local(async move {
                     if let Some(t) = &*pending.lock().await {
-                        let addr = t
-                            .register_remote_info(answer.encode().unwrap())
-                            .await
-                            .unwrap();
+                        let addr = t.register_remote_info(answer.into()).await.unwrap();
                         swarm.register(&addr, t.clone()).await.unwrap();
                         link.send_message(Msg::Update);
                     }
@@ -307,4 +304,8 @@ impl Component for MainView {
             </body>
         }
     }
+
+    fn rendered(&mut self, _ctx: &Context<Self>, _first_render: bool) {}
+
+    fn destroy(&mut self, _ctx: &Context<Self>) {}
 }
